@@ -22,3 +22,15 @@ CREATE TABLE IF NOT EXISTS counters (
 -- Tracking numbers start at JBR-1001. Change the seed value before first
 -- run if you want a different starting number.
 INSERT OR IGNORE INTO counters (name, value) VALUES ('tracking_number', 1000);
+
+-- Custom status updates a staff member can post against a shipment,
+-- shown as a running log beneath the fixed pickup/clearance/delivery
+-- timeline on the public tracking page.
+CREATE TABLE IF NOT EXISTS updates (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  shipment_id TEXT NOT NULL,
+  color TEXT NOT NULL,              -- 'green' | 'yellow' | 'red'
+  message TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (shipment_id) REFERENCES shipments(id)
+);

@@ -23,7 +23,12 @@ export async function onRequestGet(context) {
     });
   }
 
-  return new Response(JSON.stringify({ found: true, shipment: row }), {
+  const { results: updates } = await env.DB
+    .prepare('SELECT color, message, created_at FROM updates WHERE shipment_id = ? ORDER BY created_at DESC')
+    .bind(id)
+    .all();
+
+  return new Response(JSON.stringify({ found: true, shipment: row, updates }), {
     headers: { 'Content-Type': 'application/json' }
   });
 }

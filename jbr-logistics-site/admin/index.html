@@ -121,7 +121,20 @@
       row.innerHTML =
         '<div class="top"><div><div class="id">' + s.id + '</div><div class="route">' + s.origin + ' → ' + s.destination + ' · ' + s.company + '</div></div>' +
         '<div class="stage-label">' + stageLabel + '</div></div>' +
-        '<div class="actions"><button class="btn ghost advance" data-id="' + s.id + '" ' + (s.stage >= 2 ? 'disabled' : '') + '>Advance to next stage</button></div>';
+        '<div class="actions">' +
+        '<button class="btn ghost advance" data-id="' + s.id + '" ' + (s.stage >= 2 ? 'disabled' : '') + '>Advance to next stage</button> ' +
+        '<button class="btn ghost toggle-update" data-id="' + s.id + '">Post update</button>' +
+        '</div>' +
+        '<div class="update-form" id="uf-' + s.id + '" style="display:none;">' +
+        '<div class="color-select">' +
+        '<label class="color-option"><input type="radio" name="color-' + s.id + '" value="green" checked><span class="swatch green"></span>On schedule</label>' +
+        '<label class="color-option"><input type="radio" name="color-' + s.id + '" value="yellow"><span class="swatch yellow"></span>Minor delay</label>' +
+        '<label class="color-option"><input type="radio" name="color-' + s.id + '" value="red"><span class="swatch red"></span>Needs attention</label>' +
+        '</div>' +
+        '<textarea placeholder="What should the client see? e.g. \'Held briefly at customs, expect a half-day delay.\'"></textarea>' +
+        '<button class="btn-primary submit-update" data-id="' + s.id + '" style="padding:9px 18px; font-size:0.85rem;">Send update</button>' +
+        '<span class="update-flag" style="margin-left:10px; font-size:0.8rem; color:var(--blue-bright);"></span>' +
+        '</div>';
       wrap.appendChild(row);
     });
     wrap.querySelectorAll('.advance').forEach(function (btn) {
@@ -135,6 +148,52 @@
           .then(function (res) { return res.json(); })
           .then(function () { loadShipments(function () {}); })
           .catch(function () { btn.disabled = false; });
+      });
+    });
+    wrap.querySelectorAll('.toggle-update').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var form = document.getElementById('uf-' + btn.dataset.id);
+        form.style.display = form.style.display === 'none' ? 'block' : 'none';
+      });
+    });
+    wrap.querySelectorAll('.submit-update').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = btn.dataset.id;
+        var form = document.getElementById('uf-' + id);
+        var color = form.querySelector('input[name="color-' + id + '"]:checked').value;
+        var textarea = form.querySelector('textarea');
+        var message = textarea.value.trim();
+        var flag = form.querySelector('.update-flag');
+        if (!message) {
+          flag.style.color = '#E2574C';
+          flag.textContent = 'Write a message first.';
+          return;
+        }
+        btn.disabled = true;
+        flag.style.color = 'var(--blue-bright)';
+        flag.textContent = 'Sending…';
+        fetch('/api/admin/updates', {
+          method: 'POST',
+          headers: authHeader(),
+          body: JSON.stringify({ id: id, color: color, message: message })
+        })
+          .then(function (res) { return res.json(); })
+          .then(function (data) {
+            btn.disabled = false;
+            if (data && data.ok) {
+              textarea.value = '';
+              flag.textContent = 'Posted — visible on the tracking page now.';
+              setTimeout(function () { flag.textContent = ''; }, 4000);
+            } else {
+              flag.style.color = '#E2574C';
+              flag.textContent = 'Something went wrong — try again.';
+            }
+          })
+          .catch(function () {
+            btn.disabled = false;
+            flag.style.color = '#E2574C';
+            flag.textContent = 'Something went wrong — try again.';
+          });
       });
     });
   }

@@ -23,6 +23,10 @@
    ```
    wrangler d1 execute jbr-tracking --file=./schema.sql
    ```
+   (Already ran this once and just adding the new `updates` table? You can
+   re-run the whole file — every statement in it is safe to run more than
+   once — or just paste the `CREATE TABLE updates (...)` block on its own
+   into the D1 dashboard's Console tab.)
 
 4. **Set the admin password.** In the Cloudflare dashboard: your Pages
    project → Settings → Environment variables → add `ADMIN_PASSWORD`
@@ -42,6 +46,13 @@
 - As the shipment moves, staff click "Advance to next stage" on the
   admin page — the customer's tracking page reflects it immediately
   (it's a live database lookup, not cached).
+- For anything more specific than the three fixed stages — a customs
+  hold, a delay, confirmation everything's fine — staff click "Post
+  update" on that shipment, pick a color (green = on schedule, yellow =
+  minor delay, red = needs attention), and write a short note. It shows
+  up on the customer's tracking page right under the timeline, newest
+  first. These are append-only — there's no edit or delete, so it stays
+  an honest running log.
 
 ## Notes / what's intentionally simple
 - Auth is a single shared password, not per-user accounts — matches the

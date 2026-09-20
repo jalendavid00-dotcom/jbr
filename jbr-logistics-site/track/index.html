@@ -49,6 +49,11 @@
         <div class="manifest-row"><span class="k">Shipment type</span><span class="v" id="m-type">—</span></div>
         <div class="timeline" id="m-timeline"></div>
         <div id="m-status"></div>
+        <div id="m-banner"></div>
+        <div class="update-log" id="m-log" style="display:none;">
+          <div class="log-label">Updates</div>
+          <div id="m-log-rows"></div>
+        </div>
       </div>
     </div>
   </section>
@@ -69,6 +74,17 @@
   var STAGES = ['pickup', 'clearance', 'delivered'];
   var STAGE_LABELS = { pickup: 'Pickup', clearance: 'Border clearance', delivered: 'Delivered' };
   var FIELD_BY_STAGE = ['pickup_at', 'clearance_at', 'delivered_at'];
+  var COLOR_LABELS = { green: 'On schedule', yellow: 'Minor delay', red: 'Needs attention' };
+
+  function escapeHtml(s) {
+    var div = document.createElement('div');
+    div.textContent = s == null ? '' : String(s);
+    return div.innerHTML;
+  }
+
+  function fmtTime(ts) {
+    return ts ? new Date(ts).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—';
+  }
 
   function renderTimeline(stageIndex, s) {
     var el = document.getElementById('m-timeline');
@@ -80,12 +96,42 @@
       var ts = s[FIELD_BY_STAGE[i]];
       div.innerHTML = '<div class="bar"></div><div class="dot"></div>' +
         '<div class="lab">' + STAGE_LABELS[key] + '</div>' +
-        '<div class="ts">' + (ts ? new Date(ts).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—') + '</div>';
+        '<div class="ts">' + fmtTime(ts) + '</div>';
       el.appendChild(div);
     });
   }
 
-  function showShipment(s) {
+  function renderBannerAndLog(updates) {
+    var banner = document.getElementById('m-banner');
+    var logWrap = document.getElementById('m-log');
+    var logRows = document.getElementById('m-log-rows');
+
+    if (!updates || !updates.length) {
+      banner.innerHTML = '';
+      logWrap.style.display = 'none';
+      return;
+    }
+
+    var latest = updates[0];
+    banner.innerHTML =
+      '<div class="status-banner ' + latest.color + '">' +
+      '<div class="dot"></div>' +
+      '<div><div class="msg">' + escapeHtml(latest.message) + '</div>' +
+      '<div class="ts">' + (COLOR_LABELS[latest.color] || '') + ' · ' + fmtTime(latest.created_at) + '</div></div>' +
+      '</div>';
+
+    logRows.innerHTML = '';
+    updates.forEach(function (u) {
+      var row = document.createElement('div');
+      row.className = 'update-row';
+      row.innerHTML = '<div class="dot ' + u.color + '"></div>' +
+        '<div><div class="msg">' + escapeHtml(u.message) + '</div><div class="ts">' + fmtTime(u.created_at) + '</div></div>';
+      logRows.appendChild(row);
+    });
+    logWrap.style.display = updates.length > 1 ? 'block' : 'none';
+  }
+
+  function showShipment(s, updates) {
     document.getElementById('m-title').textContent = s.id;
     document.getElementById('m-origin').textContent = s.origin;
     document.getElementById('m-dest').textContent = s.destination;
@@ -97,6 +143,7 @@
     } else {
       statusEl.innerHTML = '<div class="status-chip transit"><span class="dot"></span> In transit — ' + STAGE_LABELS[STAGES[s.stage]] + '</div>';
     }
+    renderBannerAndLog(updates);
     document.getElementById('manifest').classList.add('show');
   }
 
@@ -118,7 +165,7 @@
       })
       .then(function (data) {
         setMsg('', false);
-        showShipment(data.shipment);
+        showShipment(data.shipment, data.updates || []);
       })
       .catch(function (err) {
         if (err.message === 'not_found') {
