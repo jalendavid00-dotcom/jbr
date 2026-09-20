@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — JBR Logistics</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/site.css">
+</head>
+<body>
+
+<header class="site-nav">
+  <div class="wrap nav-inner">
+    <a href="/" class="nav-brand">
+      <img src="/assets/logo.png" alt="JBR Logistics crest">
+      <span class="nav-brand-text">JBR LOGISTICS<span>Admin</span></span>
+    </a>
+    <nav class="nav-links">
+      <a href="/">Back to site</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="tracker-shell" id="lock-screen">
+    <div class="wrap admin-lock">
+      <div class="section-head" style="margin: 0 auto 20px;">
+        <div class="section-eyebrow" style="justify-content:center;"><span class="dash"></span>Staff only</div>
+        <h2>Sign in</h2>
+      </div>
+      <input type="password" id="admin-password" placeholder="Admin password" autocomplete="current-password">
+      <button class="btn-primary" id="unlock-btn" style="width:100%;">Sign in</button>
+      <p class="tracker-msg" id="lock-msg"></p>
+    </div>
+  </section>
+
+  <section class="tracker-shell" id="admin-screen" style="display:none;">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="section-eyebrow"><span class="dash"></span>Admin</div>
+        <h2>Shipments</h2>
+        <p>Create a shipment and hand the client the tracking number. Advance the stage as it moves.</p>
+      </div>
+
+      <div class="admin-grid">
+        <div>
+          <h3 style="font-family:var(--font-display); font-size:1rem; margin-bottom:10px;">Active shipments</h3>
+          <div class="shipment-list" id="shipment-list"></div>
+        </div>
+
+        <div class="new-form">
+          <h3>Create a shipment</h3>
+          <div class="field"><label>Company</label><input type="text" id="n-company" placeholder="Client name"></div>
+          <div class="field"><label>Pickup location</label><input type="text" id="n-origin" placeholder="City, province/state"></div>
+          <div class="field"><label>Delivery location</label><input type="text" id="n-dest" placeholder="City, province/state"></div>
+          <div class="field"><label>Shipment type</label>
+            <select id="n-type">
+              <option>General freight</option>
+              <option>Laboratory samples</option>
+              <option>Medical specimens</option>
+            </select>
+          </div>
+          <button class="btn-primary" id="create-btn" style="width:100%;">Create &amp; generate tracking number</button>
+          <div id="create-flag"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+(function () {
+  var STAGES = ['pickup', 'clearance', 'delivered'];
+  var STAGE_LABELS = { pickup: 'Pickup', clearance: 'Border clearance', delivered: 'Delivered' };
+
+  function authHeader() {
+    var pw = sessionStorage.getItem('jbr_admin_pw') || '';
+    return { 'Authorization': 'Bearer ' + pw, 'Content-Type': 'application/json' };
+  }
+
+  function showLockError(text) {
+    var el = document.getElementById('lock-msg');
+    el.textContent = text;
+    el.className = 'tracker-msg show error';
+  }
+
+  function tryUnlock(pw) {
+    sessionStorage.setItem('jbr_admin_pw', pw);
+    loadShipments(function (ok) {
+      if (ok) {
+        document.getElementById('lock-screen').style.display = 'none';
+        document.getElementById('admin-screen').style.display = 'block';
+      } else {
+        sessionStorage.removeItem('jbr_admin_pw');
+        showLockError('That password is incorrect.');
+      }
+    });
+  }
+
+  document.getElementById('unlock-btn').addEventListener('click', function () {
+    tryUnlock(document.getElementById('admin-password').value);
+  });
+  document.getElementById('admin-password').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') document.getElementById('unlock-btn').click();
+  });
+
+  function renderList(shipments) {
+    var wrap = document.getElementById('shipment-list');
+    wrap.innerHTML = '';
+    if (!shipments.length) {
+      wrap.innerHTML = '<p style="color:var(--grey); font-size:0.9rem; padding:16px 0;">No shipments yet — create the first one.</p>';
+      return;
+    }
+    shipments.forEach(function (s) {
+      var row = document.createElement('div');
+      row.className = 'ship-row';
+      var stageLabel = s.stage >= 2 ? 'Delivered' : STAGE_LABELS[STAGES[s.stage]];
+      row.innerHTML =
+        '<div class="top"><div><div class="id">' + s.id + '</div><div class="route">' + s.origin + ' → ' + s.destination + ' · ' + s.company + '</div></div>' +
+        '<div class="stage-label">' + stageLabel + '</div></div>' +
+        '<div class="actions"><button class="btn ghost advance" data-id="' + s.id + '" ' + (s.stage >= 2 ? 'disabled' : '') + '>Advance to next stage</button></div>';
+      wrap.appendChild(row);
+    });
+    wrap.querySelectorAll('.advance').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        btn.disabled = true;
+        fetch('/api/admin/advance', {
+          method: 'POST',
+          headers: authHeader(),
+          body: JSON.stringify({ id: btn.dataset.id })
+        })
+          .then(function (res) { return res.json(); })
+          .then(function () { loadShipments(function () {}); })
+          .catch(function () { btn.disabled = false; });
+      });
+    });
+  }
+
+  function loadShipments(cb) {
+    fetch('/api/admin/shipments', { headers: authHeader() })
+      .then(function (res) {
+        if (res.status === 401) { cb && cb(false); return null; }
+        return res.json();
+      })
+      .then(function (data) {
+        if (!data) return;
+        renderList(data.shipments || []);
+        cb && cb(true);
+      })
+      .catch(function () { cb && cb(false); });
+  }
+
+  document.getElementById('create-btn').addEventListener('click', function () {
+    var payload = {
+      company: document.getElementById('n-company').value.trim(),
+      origin: document.getElementById('n-origin').value.trim(),
+      destination: document.getElementById('n-dest').value.trim(),
+      type: document.getElementById('n-type').value
+    };
+    fetch('/api/admin/shipments', {
+      method: 'POST',
+      headers: authHeader(),
+      body: JSON.stringify(payload)
+    })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (data && data.id) {
+          document.getElementById('n-company').value = '';
+          document.getElementById('n-origin').value = '';
+          document.getElementById('n-dest').value = '';
+          var flag = document.getElementById('create-flag');
+          flag.innerHTML = '<div class="created-flag">' + data.id + ' created — give this number to the client so they can track it.</div>';
+          loadShipments(function () {});
+        }
+      });
+  });
+
+  // stay signed in for this tab session
+  if (sessionStorage.getItem('jbr_admin_pw')) {
+    loadShipments(function (ok) {
+      if (ok) {
+        document.getElementById('lock-screen').style.display = 'none';
+        document.getElementById('admin-screen').style.display = 'block';
+      }
+    });
+  }
+})();
+</script>
+
+</body>
+</html>
