@@ -68,7 +68,7 @@
   @media (max-width: 640px) {
     .nav-inner { flex-wrap: wrap; row-gap: 12px; padding: 14px 0; }
     .nav-brand-text span { display: none; }
-    nav.nav-links { width: 100%; justify-content: space-between; gap: 14px; font-size: 0.82rem; flex-wrap: wrap; row-gap: 8px; }
+    nav.nav-links { width: 100%; justify-content: space-between; gap: 14px; font-size: 0.8rem; flex-wrap: wrap; row-gap: 8px; padding-right: 4px; }
     .nav-cta { padding: 8px 14px; }
   }
   .nav-cta { border: 1px solid var(--blue-deep); padding: 9px 18px; border-radius: 2px; color: var(--paper) !important; font-weight: 600; }
