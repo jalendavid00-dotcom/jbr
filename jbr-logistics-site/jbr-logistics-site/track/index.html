@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Track a Shipment — JBR Logistics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/site.css">
+</head>
+<body>
+
+<header class="site-nav">
+  <div class="wrap nav-inner">
+    <a href="/" class="nav-brand">
+      <img src="/assets/logo.png" alt="JBR Logistics crest">
+      <span class="nav-brand-text">JBR LOGISTICS<span>Crossing Borders. Delivering Trust.</span></span>
+    </a>
+    <nav class="nav-links">
+      <a href="/#capabilities">What we move</a>
+      <a href="/#contact" class="nav-cta">Request a Quote</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="tracker-shell">
+    <div class="wrap" style="max-width: 720px;">
+      <div class="section-head">
+        <div class="section-eyebrow"><span class="dash"></span>Track a shipment</div>
+        <h2>Where's my shipment?</h2>
+        <p>Enter the tracking number JBR gave you to see where it is right now.</p>
+      </div>
+
+      <div class="lookup-row">
+        <input type="text" id="track-input" placeholder="e.g. JBR-1001" autocomplete="off">
+        <button class="btn-primary" id="track-btn" type="button">Track</button>
+      </div>
+      <p class="tracker-msg" id="track-msg"></p>
+
+      <div class="manifest" id="manifest">
+        <div class="manifest-head">
+          <div class="label">Custody Manifest</div>
+          <div class="title" id="m-title">—</div>
+        </div>
+        <div class="manifest-row"><span class="k">Origin</span><span class="v" id="m-origin">—</span></div>
+        <div class="manifest-row"><span class="k">Destination</span><span class="v" id="m-dest">—</span></div>
+        <div class="manifest-row"><span class="k">Shipment type</span><span class="v" id="m-type">—</span></div>
+        <div class="timeline" id="m-timeline"></div>
+        <div id="m-status"></div>
+        <div id="m-banner"></div>
+        <div class="update-log" id="m-log" style="display:none;">
+          <div class="log-label">Updates</div>
+          <div id="m-log-rows"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap footer-inner">
+    <div class="footer-brand">
+      <img src="/assets/logo.png" alt="JBR Logistics crest">
+      <div class="footer-brand-text"><strong>JBR Logistics</strong>Crossing Borders. Delivering Trust.</div>
+    </div>
+    <div class="copy">&copy; 2026 JBR Logistics. All rights reserved.<br><span style="opacity:0.7;">Powered by Honō Design</span></div>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var STAGES = ['pickup', 'clearance', 'delivered'];
+  var STAGE_LABELS = { pickup: 'Pickup', clearance: 'Border clearance', delivered: 'Delivered' };
+  var FIELD_BY_STAGE = ['pickup_at', 'clearance_at', 'delivered_at'];
+  var COLOR_LABELS = { green: 'On schedule', yellow: 'Minor delay', red: 'Needs attention' };
+
+  function escapeHtml(s) {
+    var div = document.createElement('div');
+    div.textContent = s == null ? '' : String(s);
+    return div.innerHTML;
+  }
+
+  function fmtTime(ts) {
+    return ts ? new Date(ts).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—';
+  }
+
+  function renderTimeline(stageIndex, s) {
+    var el = document.getElementById('m-timeline');
+    el.innerHTML = '';
+    STAGES.forEach(function (key, i) {
+      var div = document.createElement('div');
+      var cls = i < stageIndex ? 'done' : (i === stageIndex ? 'current' : '');
+      div.className = 'tl-step ' + cls;
+      var ts = s[FIELD_BY_STAGE[i]];
+      div.innerHTML = '<div class="bar"></div><div class="dot"></div>' +
+        '<div class="lab">' + STAGE_LABELS[key] + '</div>' +
+        '<div class="ts">' + fmtTime(ts) + '</div>';
+      el.appendChild(div);
+    });
+  }
+
+  function renderBannerAndLog(updates) {
+    var banner = document.getElementById('m-banner');
+    var logWrap = document.getElementById('m-log');
+    var logRows = document.getElementById('m-log-rows');
+
+    if (!updates || !updates.length) {
+      banner.innerHTML = '';
+      logWrap.style.display = 'none';
+      return;
+    }
+
+    var latest = updates[0];
+    banner.innerHTML =
+      '<div class="status-banner ' + latest.color + '">' +
+      '<div class="dot"></div>' +
+      '<div><div class="msg">' + escapeHtml(latest.message) + '</div>' +
+      '<div class="ts">' + (COLOR_LABELS[latest.color] || '') + ' · ' + fmtTime(latest.created_at) + '</div></div>' +
+      '</div>';
+
+    logRows.innerHTML = '';
+    updates.forEach(function (u) {
+      var row = document.createElement('div');
+      row.className = 'update-row';
+      row.innerHTML = '<div class="dot ' + u.color + '"></div>' +
+        '<div><div class="msg">' + escapeHtml(u.message) + '</div><div class="ts">' + fmtTime(u.created_at) + '</div></div>';
+      logRows.appendChild(row);
+    });
+    logWrap.style.display = updates.length > 1 ? 'block' : 'none';
+  }
+
+  function showShipment(s, updates) {
+    document.getElementById('m-title').textContent = s.id;
+    document.getElementById('m-origin').textContent = s.origin;
+    document.getElementById('m-dest').textContent = s.destination;
+    document.getElementById('m-type').textContent = s.type;
+    renderTimeline(s.stage, s);
+    var statusEl = document.getElementById('m-status');
+    if (s.stage >= 2) {
+      statusEl.innerHTML = '<div class="status-chip done"><span class="dot"></span> Delivered</div>';
+    } else {
+      statusEl.innerHTML = '<div class="status-chip transit"><span class="dot"></span> In transit — ' + STAGE_LABELS[STAGES[s.stage]] + '</div>';
+    }
+    renderBannerAndLog(updates);
+    document.getElementById('manifest').classList.add('show');
+  }
+
+  function setMsg(text, isError) {
+    var el = document.getElementById('track-msg');
+    el.textContent = text || '';
+    el.className = 'tracker-msg' + (text ? ' show' : '') + (isError ? ' error' : '');
+  }
+
+  function track(id) {
+    if (!id) return;
+    document.getElementById('manifest').classList.remove('show');
+    setMsg('Looking that up…', false);
+    fetch('/api/track/' + encodeURIComponent(id))
+      .then(function (res) {
+        if (res.status === 404) { throw new Error('not_found'); }
+        if (!res.ok) { throw new Error('server'); }
+        return res.json();
+      })
+      .then(function (data) {
+        setMsg('', false);
+        showShipment(data.shipment, data.updates || []);
+      })
+      .catch(function (err) {
+        if (err.message === 'not_found') {
+          setMsg("We couldn't find a shipment with that number. Double-check it and try again, or contact us directly.", true);
+        } else {
+          setMsg('Something went wrong looking that up — please try again in a moment.', true);
+        }
+      });
+  }
+
+  document.getElementById('track-btn').addEventListener('click', function () {
+    track(document.getElementById('track-input').value.trim().toUpperCase());
+  });
+  document.getElementById('track-input').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') document.getElementById('track-btn').click();
+  });
+
+  // support /track#JBR-1001 style deep links
+  var hashId = window.location.hash.replace('#', '').trim().toUpperCase();
+  if (hashId) {
+    document.getElementById('track-input').value = hashId;
+    track(hashId);
+  }
+})();
+</script>
+
+</body>
+</html>

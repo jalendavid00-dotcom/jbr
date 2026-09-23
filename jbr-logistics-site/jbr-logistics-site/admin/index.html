@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — JBR Logistics</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/site.css">
+</head>
+<body>
+
+<header class="site-nav">
+  <div class="wrap nav-inner">
+    <a href="/" class="nav-brand">
+      <img src="/assets/logo.png" alt="JBR Logistics crest">
+      <span class="nav-brand-text">JBR LOGISTICS<span>Admin</span></span>
+    </a>
+    <nav class="nav-links">
+      <a href="/">Back to site</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="tracker-shell" id="lock-screen">
+    <div class="wrap admin-lock">
+      <div class="section-head" style="margin: 0 auto 20px;">
+        <div class="section-eyebrow" style="justify-content:center;"><span class="dash"></span>Staff only</div>
+        <h2>Sign in</h2>
+      </div>
+      <input type="password" id="admin-password" placeholder="Admin password" autocomplete="current-password">
+      <button class="btn-primary" id="unlock-btn" style="width:100%;">Sign in</button>
+      <p class="tracker-msg" id="lock-msg"></p>
+    </div>
+  </section>
+
+  <section class="tracker-shell" id="admin-screen" style="display:none;">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="section-eyebrow"><span class="dash"></span>Admin</div>
+        <h2>Shipments</h2>
+        <p>Create a shipment and hand the client the tracking number. Advance the stage as it moves.</p>
+      </div>
+
+      <div class="admin-grid">
+        <div>
+          <h3 style="font-family:var(--font-display); font-size:1rem; margin-bottom:10px;">Active shipments</h3>
+          <label style="display:flex; align-items:center; gap:8px; font-size:0.85rem; color:var(--grey); margin-bottom:14px; cursor:pointer;">
+            <input type="checkbox" id="show-delivered"> Show delivered
+          </label>
+          <div id="count-warning"></div>
+          <div class="shipment-list" id="shipment-list"></div>
+        </div>
+
+        <div class="new-form">
+          <h3>Create a shipment</h3>
+          <div class="field"><label>Company</label><input type="text" id="n-company" placeholder="Client name"></div>
+          <div class="field"><label>Pickup location</label><input type="text" id="n-origin" placeholder="City, province/state"></div>
+          <div class="field"><label>Delivery location</label><input type="text" id="n-dest" placeholder="City, province/state"></div>
+          <div class="field"><label>Shipment type</label>
+            <select id="n-type">
+              <option>General freight</option>
+              <option>Laboratory samples</option>
+              <option>Medical specimens</option>
+            </select>
+          </div>
+          <button class="btn-primary" id="create-btn" style="width:100%;">Create &amp; generate tracking number</button>
+          <div id="create-flag"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+(function () {
+  var STAGES = ['pickup', 'clearance', 'delivered'];
+  var STAGE_LABELS = { pickup: 'Pickup', clearance: 'Border clearance', delivered: 'Delivered' };
+  var ACTIVE_WARNING_THRESHOLD = 50;
+  var allShipments = [];
+
+  function escapeHtml(s) {
+    var div = document.createElement('div');
+    div.textContent = s == null ? '' : String(s);
+    return div.innerHTML;
+  }
+
+  function fmtTime(ts) {
+    return ts ? new Date(ts).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—';
+  }
+
+  function authHeader() {
+    var pw = sessionStorage.getItem('jbr_admin_pw') || '';
+    return { 'Authorization': 'Bearer ' + pw, 'Content-Type': 'application/json' };
+  }
+
+  function showLockError(text) {
+    var el = document.getElementById('lock-msg');
+    el.textContent = text;
+    el.className = 'tracker-msg show error';
+  }
+
+  function tryUnlock(pw) {
+    sessionStorage.setItem('jbr_admin_pw', pw);
+    loadShipments(function (ok) {
+      if (ok) {
+        document.getElementById('lock-screen').style.display = 'none';
+        document.getElementById('admin-screen').style.display = 'block';
+      } else {
+        sessionStorage.removeItem('jbr_admin_pw');
+        showLockError('That password is incorrect.');
+      }
+    });
+  }
+
+  document.getElementById('unlock-btn').addEventListener('click', function () {
+    tryUnlock(document.getElementById('admin-password').value);
+  });
+  document.getElementById('admin-password').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') document.getElementById('unlock-btn').click();
+  });
+  document.getElementById('show-delivered').addEventListener('change', function () {
+    renderFiltered();
+  });
+
+  function renderFiltered() {
+    var showDelivered = document.getElementById('show-delivered').checked;
+    var activeCount = allShipments.filter(function (s) { return s.stage < 2; }).length;
+
+    var warningEl = document.getElementById('count-warning');
+    if (activeCount > ACTIVE_WARNING_THRESHOLD) {
+      warningEl.innerHTML = '<div class="status-banner yellow" style="margin-top:0; margin-bottom:16px;"><div class="dot"></div><div class="msg">You have ' + activeCount + ' active shipments. Consider deleting delivered ones you no longer need to keep this list manageable.</div></div>';
+    } else {
+      warningEl.innerHTML = '';
+    }
+
+    var visible = showDelivered ? allShipments : allShipments.filter(function (s) { return s.stage < 2; });
+    renderList(visible);
+  }
+
+  function renderList(shipments) {
+    var wrap = document.getElementById('shipment-list');
+    wrap.innerHTML = '';
+    if (!shipments.length) {
+      wrap.innerHTML = '<p style="color:var(--grey); font-size:0.9rem; padding:16px 0;">No shipments to show.</p>';
+      return;
+    }
+    shipments.forEach(function (s) {
+      var row = document.createElement('div');
+      row.className = 'ship-row';
+      var stageLabel = s.stage >= 2 ? 'Delivered' : STAGE_LABELS[STAGES[s.stage]];
+      row.innerHTML =
+        '<div class="top"><div><div class="id">' + escapeHtml(s.id) + '</div><div class="route">' + escapeHtml(s.origin) + ' → ' + escapeHtml(s.destination) + ' · ' + escapeHtml(s.company) + '</div></div>' +
+        '<div class="stage-label">' + stageLabel + '</div></div>' +
+        '<div class="actions">' +
+        '<button class="btn ghost advance" data-id="' + s.id + '" ' + (s.stage >= 2 ? 'disabled' : '') + '>Advance to next stage</button> ' +
+        '<button class="btn ghost toggle-update" data-id="' + s.id + '">Post update</button> ' +
+        '<button class="btn ghost toggle-log" data-id="' + s.id + '">View log</button> ' +
+        '<button class="btn ghost delete-shipment" data-id="' + s.id + '" style="color:#E2574C; border-color:rgba(226,87,76,0.4);">Delete</button>' +
+        '</div>' +
+        '<div class="update-form" id="uf-' + s.id + '" style="display:none;">' +
+        '<div class="color-select">' +
+        '<label class="color-option"><input type="radio" name="color-' + s.id + '" value="green" checked><span class="swatch green"></span>On schedule</label>' +
+        '<label class="color-option"><input type="radio" name="color-' + s.id + '" value="yellow"><span class="swatch yellow"></span>Minor delay</label>' +
+        '<label class="color-option"><input type="radio" name="color-' + s.id + '" value="red"><span class="swatch red"></span>Needs attention</label>' +
+        '</div>' +
+        '<textarea placeholder="What should the client see? e.g. \'Held briefly at customs, expect a half-day delay.\'"></textarea>' +
+        '<button class="btn-primary submit-update" data-id="' + s.id + '" style="padding:9px 18px; font-size:0.85rem;">Send update</button>' +
+        '<span class="update-flag" style="margin-left:10px; font-size:0.8rem; color:var(--blue-bright);"></span>' +
+        '</div>' +
+        '<div class="update-form" id="lg-' + s.id + '" style="display:none;">' +
+        '<div class="log-label" style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.03em; color:var(--grey-dim); margin-bottom:8px;">Update log</div>' +
+        '<div id="lg-rows-' + s.id + '" style="font-size:0.85rem; color:var(--grey);">Loading…</div>' +
+        '</div>';
+      wrap.appendChild(row);
+    });
+
+    wrap.querySelectorAll('.advance').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        btn.disabled = true;
+        fetch('/api/admin/advance', {
+          method: 'POST',
+          headers: authHeader(),
+          body: JSON.stringify({ id: btn.dataset.id })
+        })
+          .then(function (res) { return res.json(); })
+          .then(function () { loadShipments(function () {}); })
+          .catch(function () { btn.disabled = false; });
+      });
+    });
+
+    wrap.querySelectorAll('.toggle-update').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var form = document.getElementById('uf-' + btn.dataset.id);
+        form.style.display = form.style.display === 'none' ? 'block' : 'none';
+      });
+    });
+
+    wrap.querySelectorAll('.submit-update').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = btn.dataset.id;
+        var form = document.getElementById('uf-' + id);
+        var color = form.querySelector('input[name="color-' + id + '"]:checked').value;
+        var textarea = form.querySelector('textarea');
+        var message = textarea.value.trim();
+        var flag = form.querySelector('.update-flag');
+        if (!message) {
+          flag.style.color = '#E2574C';
+          flag.textContent = 'Write a message first.';
+          return;
+        }
+        btn.disabled = true;
+        flag.style.color = 'var(--blue-bright)';
+        flag.textContent = 'Sending…';
+        fetch('/api/admin/updates', {
+          method: 'POST',
+          headers: authHeader(),
+          body: JSON.stringify({ id: id, color: color, message: message })
+        })
+          .then(function (res) { return res.json(); })
+          .then(function (data) {
+            btn.disabled = false;
+            if (data && data.ok) {
+              textarea.value = '';
+              flag.textContent = 'Posted — visible on the tracking page now.';
+              setTimeout(function () { flag.textContent = ''; }, 4000);
+              var logPanel = document.getElementById('lg-' + id);
+              if (logPanel && logPanel.style.display !== 'none') loadLog(id);
+            } else {
+              flag.style.color = '#E2574C';
+              flag.textContent = 'Something went wrong — try again.';
+            }
+          })
+          .catch(function () {
+            btn.disabled = false;
+            flag.style.color = '#E2574C';
+            flag.textContent = 'Something went wrong — try again.';
+          });
+      });
+    });
+
+    wrap.querySelectorAll('.toggle-log').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = btn.dataset.id;
+        var panel = document.getElementById('lg-' + id);
+        var opening = panel.style.display === 'none';
+        panel.style.display = opening ? 'block' : 'none';
+        if (opening) loadLog(id);
+      });
+    });
+
+    wrap.querySelectorAll('.delete-shipment').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        if (btn.dataset.confirming === 'true') {
+          btn.disabled = true;
+          fetch('/api/admin/delete-shipment', {
+            method: 'POST',
+            headers: authHeader(),
+            body: JSON.stringify({ id: btn.dataset.id })
+          })
+            .then(function (res) { return res.json(); })
+            .then(function () { loadShipments(function () {}); })
+            .catch(function () { btn.disabled = false; });
+        } else {
+          btn.dataset.confirming = 'true';
+          btn.textContent = 'Confirm delete?';
+          setTimeout(function () {
+            btn.dataset.confirming = 'false';
+            btn.textContent = 'Delete';
+          }, 4000);
+        }
+      });
+    });
+  }
+
+  function loadLog(id) {
+    var rowsEl = document.getElementById('lg-rows-' + id);
+    if (!rowsEl) return;
+    rowsEl.textContent = 'Loading…';
+    fetch('/api/admin/updates?id=' + encodeURIComponent(id), { headers: authHeader() })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        var updates = (data && data.updates) || [];
+        if (!updates.length) {
+          rowsEl.innerHTML = '<p style="padding:6px 0;">No updates posted yet.</p>';
+          return;
+        }
+        rowsEl.innerHTML = '';
+        updates.forEach(function (u) {
+          var row = document.createElement('div');
+          row.style.cssText = 'display:flex; align-items:flex-start; justify-content:space-between; gap:10px; padding:8px 0; border-top:1px solid var(--line-dark);';
+          row.innerHTML =
+            '<div style="display:flex; gap:8px; align-items:flex-start;">' +
+            '<div class="dot ' + u.color + '" style="width:8px; height:8px; border-radius:50%; margin-top:5px; flex-shrink:0;"></div>' +
+            '<div><div style="color:var(--paper);">' + escapeHtml(u.message) + '</div><div style="font-size:0.74rem; color:var(--grey-dim); margin-top:2px;">' + fmtTime(u.created_at) + '</div></div>' +
+            '</div>' +
+            '<button class="btn ghost del-update-entry" data-uid="' + u.id + '" data-sid="' + id + '" style="padding:4px 9px; font-size:0.72rem; flex-shrink:0;">×</button>';
+          rowsEl.appendChild(row);
+        });
+        rowsEl.querySelectorAll('.del-update-entry').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            btn.disabled = true;
+            fetch('/api/admin/delete-update', {
+              method: 'POST',
+              headers: authHeader(),
+              body: JSON.stringify({ updateId: btn.dataset.uid })
+            })
+              .then(function (res) { return res.json(); })
+              .then(function () { loadLog(btn.dataset.sid); })
+              .catch(function () { btn.disabled = false; });
+          });
+        });
+      })
+      .catch(function () {
+        rowsEl.innerHTML = '<p style="padding:6px 0; color:#E2574C;">Couldn\'t load the log — try again.</p>';
+      });
+  }
+
+  function loadShipments(cb) {
+    fetch('/api/admin/shipments', { headers: authHeader() })
+      .then(function (res) {
+        if (res.status === 401) { cb && cb(false); return null; }
+        return res.json();
+      })
+      .then(function (data) {
+        if (!data) return;
+        allShipments = data.shipments || [];
+        renderFiltered();
+        cb && cb(true);
+      })
+      .catch(function () { cb && cb(false); });
+  }
+
+  document.getElementById('create-btn').addEventListener('click', function () {
+    var payload = {
+      company: document.getElementById('n-company').value.trim(),
+      origin: document.getElementById('n-origin').value.trim(),
+      destination: document.getElementById('n-dest').value.trim(),
+      type: document.getElementById('n-type').value
+    };
+    fetch('/api/admin/shipments', {
+      method: 'POST',
+      headers: authHeader(),
+      body: JSON.stringify(payload)
+    })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (data && data.id) {
+          document.getElementById('n-company').value = '';
+          document.getElementById('n-origin').value = '';
+          document.getElementById('n-dest').value = '';
+          var flag = document.getElementById('create-flag');
+          flag.innerHTML = '<div class="created-flag">' + escapeHtml(data.id) + ' created — give this number to the client so they can track it.</div>';
+          loadShipments(function () {});
+        }
+      });
+  });
+
+  // stay signed in for this tab session
+  if (sessionStorage.getItem('jbr_admin_pw')) {
+    loadShipments(function (ok) {
+      if (ok) {
+        document.getElementById('lock-screen').style.display = 'none';
+        document.getElementById('admin-screen').style.display = 'block';
+      }
+    });
+  }
+})();
+</script>
+
+</body>
+</html>
