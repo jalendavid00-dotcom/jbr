@@ -51,8 +51,21 @@
   update" on that shipment, pick a color (green = on schedule, yellow =
   minor delay, red = needs attention), and write a short note. It shows
   up on the customer's tracking page right under the timeline, newest
-  first. These are append-only — there's no edit or delete, so it stays
-  an honest running log.
+  first.
+- "View log" on a shipment shows every update posted against it, each
+  with a small × to delete that one entry. There's deliberately no way
+  to edit an update's text in place — to fix a mistake, delete the wrong
+  one and post a correct one, so the log never silently changes shape
+  after a client's already seen it.
+- "Delete" on a shipment removes it and its whole update log — click
+  once to arm it, click "Confirm delete?" within a few seconds to
+  actually delete. This is permanent; the tracking number stops
+  resolving for anyone who still has the link.
+- Delivered shipments drop out of the default list automatically so it
+  doesn't get cluttered with finished work — tick "Show delivered" to
+  see the full history. If the *active* list itself passes 50, a small
+  banner suggests cleaning up old ones, but nothing is ever blocked —
+  staff can always create a new shipment no matter how many exist.
 
 ## Notes / what's intentionally simple
 - Auth is a single shared password, not per-user accounts — matches the

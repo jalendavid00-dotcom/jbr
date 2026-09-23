@@ -1,10 +1,25 @@
-// POST /api/admin/updates — body: { id, color, message } (auth required)
-// Adds one entry to the running update log for a shipment. Append-only —
-// there is no edit/delete, so the log stays an honest record.
+// GET  /api/admin/updates?id=JBR-1001 — list updates for one shipment (auth required)
+// POST /api/admin/updates            — body: { id, color, message } (auth required)
 
 import { isAuthorized, json, unauthorized } from './_lib/auth.js';
 
 const VALID_COLORS = ['green', 'yellow', 'red'];
+
+export async function onRequestGet(context) {
+  const { request, env } = context;
+  if (!isAuthorized(request, env)) return unauthorized();
+
+  const url = new URL(request.url);
+  const id = (url.searchParams.get('id') || '').toString().trim().toUpperCase();
+  if (!id) return json({ error: 'missing_id' }, 400);
+
+  const { results } = await env.DB
+    .prepare('SELECT id, color, message, created_at FROM updates WHERE shipment_id = ? ORDER BY created_at DESC')
+    .bind(id)
+    .all();
+
+  return json({ updates: results });
+}
 
 export async function onRequestPost(context) {
   const { request, env } = context;

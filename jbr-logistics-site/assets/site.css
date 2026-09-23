@@ -65,6 +65,12 @@
   nav.nav-links { display: flex; align-items: center; gap: 32px; font-size: 0.92rem; }
   nav.nav-links a { text-decoration: none; color: var(--grey); transition: color 0.15s ease; }
   nav.nav-links a:hover { color: var(--paper); }
+  @media (max-width: 640px) {
+    .nav-inner { flex-wrap: wrap; row-gap: 12px; padding: 14px 0; }
+    .nav-brand-text span { display: none; }
+    nav.nav-links { width: 100%; justify-content: space-between; gap: 14px; font-size: 0.82rem; flex-wrap: wrap; row-gap: 8px; }
+    .nav-cta { padding: 8px 14px; }
+  }
   .nav-cta { border: 1px solid var(--blue-deep); padding: 9px 18px; border-radius: 2px; color: var(--paper) !important; font-weight: 600; }
   .nav-cta:hover { background: var(--blue); border-color: var(--blue); }
 
@@ -156,6 +162,7 @@
     font-size: clamp(1.2rem, 2.4vw, 1.6rem); color: var(--paper); max-width: 34ch; margin: 0 auto; line-height: 1.4;
   }
   .pull-quote p .accent { color: var(--blue-bright); font-style: italic; }
+  .text-accent { color: var(--blue-bright); }
   .pull-quote .cap {
     margin-top: 22px; font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase;
     color: var(--grey-dim); display: flex; align-items: center; justify-content: center; gap: 14px;
