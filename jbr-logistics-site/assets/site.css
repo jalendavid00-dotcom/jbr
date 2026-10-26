@@ -65,13 +65,14 @@
   nav.nav-links { display: flex; align-items: center; gap: 32px; font-size: 0.92rem; }
   nav.nav-links a { text-decoration: none; color: var(--grey); transition: color 0.15s ease; }
   nav.nav-links a:hover { color: var(--paper); }
+  .nav-cta { border: 1px solid var(--blue-deep); padding: 9px 18px; border-radius: 2px; color: var(--paper) !important; font-weight: 600; }
   @media (max-width: 640px) {
     .nav-inner { flex-wrap: wrap; row-gap: 12px; padding: 14px 0; }
     .nav-brand-text span { display: none; }
-    nav.nav-links { width: 100%; justify-content: space-between; gap: 14px; font-size: 0.8rem; flex-wrap: wrap; row-gap: 8px; padding-right: 4px; }
-    .nav-cta { padding: 8px 14px; }
+    nav.nav-links { box-sizing: border-box; width: 100%; justify-content: space-between; gap: 10px; font-size: 0.78rem; flex-wrap: nowrap; }
+    nav.nav-links a { white-space: nowrap; }
+    nav.nav-links .nav-cta { padding: 7px 10px; }
   }
-  .nav-cta { border: 1px solid var(--blue-deep); padding: 9px 18px; border-radius: 2px; color: var(--paper) !important; font-weight: 600; }
   .nav-cta:hover { background: var(--blue); border-color: var(--blue); }
 
   /* ---------- Hero ---------- */
