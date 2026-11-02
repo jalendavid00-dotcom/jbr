@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS shipments (
   pickup_at TEXT,
   clearance_at TEXT,
   delivered_at TEXT,
+  eta TEXT,                         -- optional free-text estimated delivery window
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -34,3 +35,9 @@ CREATE TABLE IF NOT EXISTS updates (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   FOREIGN KEY (shipment_id) REFERENCES shipments(id)
 );
+
+-- ---------------------------------------------------------------------
+-- UPGRADE for an existing database (one-time; paste into the D1 Console):
+--   ALTER TABLE shipments ADD COLUMN eta TEXT;
+-- Running it a second time just returns "duplicate column name" — harmless.
+-- ---------------------------------------------------------------------

@@ -79,3 +79,14 @@
 - Tracking numbers start at `JBR-1001` and increment by one each time,
   stored in the `counters` table so two staff creating shipments at the
   same moment can't collide.
+
+
+## Adding the estimated-delivery field (one-time, existing database)
+
+In the Cloudflare dashboard open the D1 database -> Console, paste this one line and run it:
+
+    ALTER TABLE shipments ADD COLUMN eta TEXT;
+
+(If it says "duplicate column name" it's already there — nothing to do.) Until it's run the
+site keeps working; shipments are created normally but the ETA simply isn't saved, and the
+admin page says so. Staff can set or change a shipment's ETA with "Edit ETA" on its row.

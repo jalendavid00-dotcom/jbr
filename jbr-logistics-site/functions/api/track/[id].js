@@ -2,7 +2,10 @@
 
 export async function onRequestGet(context) {
   const { params, env } = context;
-  const id = (params.id || '').toString().trim().toUpperCase();
+  // Accept "1001", "JBR-1001", "jbr1001", "#1001", "JBR 1001" -> "JBR-1001"
+  const raw = (params.id || '').toString().trim().toUpperCase();
+  const m = raw.replace(/^#/, '').replace(/[\s_\-]+/g, '').match(/^(?:JBR)?(\d+)$/);
+  const id = m ? 'JBR-' + m[1] : raw;
 
   if (!id) {
     return new Response(JSON.stringify({ error: 'missing_id' }), {

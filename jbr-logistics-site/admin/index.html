@@ -67,6 +67,7 @@
               <option>Medical specimens</option>
             </select>
           </div>
+          <div class="field"><label>Estimated delivery (optional)</label><input type="text" id="n-eta" placeholder="e.g. Nov 3, between 2–6 PM ET" maxlength="120"></div>
           <button class="btn-primary" id="create-btn" style="width:100%;">Create &amp; generate tracking number</button>
           <div id="create-flag"></div>
         </div>
@@ -155,9 +156,11 @@
       row.innerHTML =
         '<div class="top"><div><div class="id">' + escapeHtml(s.id) + '</div><div class="route">' + escapeHtml(s.origin) + ' → ' + escapeHtml(s.destination) + ' · ' + escapeHtml(s.company) + '</div></div>' +
         '<div class="stage-label">' + stageLabel + '</div></div>' +
+        (s.stage < 2 ? '<div class="eta-line" style="font-size:0.82rem; color:var(--grey); margin:6px 0 2px;">Estimated delivery: <span class="eta-text" id="eta-text-' + s.id + '">' + (s.eta ? escapeHtml(s.eta) : '<em>not set</em>') + '</span></div>' : '') +
         '<div class="actions">' +
         '<button class="btn ghost advance" data-id="' + s.id + '" ' + (s.stage >= 2 ? 'disabled' : '') + '>Advance to next stage</button> ' +
         '<button class="btn ghost toggle-update" data-id="' + s.id + '">Post update</button> ' +
+        (s.stage < 2 ? '<button class="btn ghost toggle-eta" data-id="' + s.id + '">Edit ETA</button> ' : '') +
         '<button class="btn ghost toggle-log" data-id="' + s.id + '">View log</button> ' +
         '<button class="btn ghost delete-shipment" data-id="' + s.id + '" style="color:#E2574C; border-color:rgba(226,87,76,0.4);">Delete</button>' +
         '</div>' +
@@ -170,6 +173,11 @@
         '<textarea placeholder="What should the client see? e.g. \'Held briefly at customs, expect a half-day delay.\'"></textarea>' +
         '<button class="btn-primary submit-update" data-id="' + s.id + '" style="padding:9px 18px; font-size:0.85rem;">Send update</button>' +
         '<span class="update-flag" style="margin-left:10px; font-size:0.8rem; color:var(--blue-bright);"></span>' +
+        '</div>' +
+        '<div class="update-form" id="ef-' + s.id + '" style="display:none;">' +
+        '<input type="text" class="eta-input" maxlength="120" placeholder="e.g. Nov 3, between 2–6 PM ET (leave empty to clear)" value="' + escapeHtml(s.eta || '') + '" style="width:100%; margin-bottom:8px;">' +
+        '<button class="btn-primary save-eta" data-id="' + s.id + '" style="padding:9px 18px; font-size:0.85rem;">Save ETA</button>' +
+        '<span class="eta-flag" style="margin-left:10px; font-size:0.8rem; color:var(--blue-bright);"></span>' +
         '</div>' +
         '<div class="update-form" id="lg-' + s.id + '" style="display:none;">' +
         '<div class="log-label" style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.03em; color:var(--grey-dim); margin-bottom:8px;">Update log</div>' +
@@ -239,6 +247,45 @@
             flag.style.color = '#E2574C';
             flag.textContent = 'Something went wrong — try again.';
           });
+      });
+    });
+
+    wrap.querySelectorAll('.toggle-eta').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var form = document.getElementById('ef-' + btn.dataset.id);
+        form.style.display = form.style.display === 'none' ? 'block' : 'none';
+      });
+    });
+
+    wrap.querySelectorAll('.save-eta').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = btn.dataset.id;
+        var form = document.getElementById('ef-' + id);
+        var flag = form.querySelector('.eta-flag');
+        var val = form.querySelector('.eta-input').value.trim();
+        btn.disabled = true;
+        fetch('/api/admin/set-eta', {
+          method: 'POST',
+          headers: authHeader(),
+          body: JSON.stringify({ id: id, eta: val })
+        })
+          .then(function (res) { return res.json(); })
+          .then(function (data) {
+            btn.disabled = false;
+            if (data && data.ok) {
+              var t = document.getElementById('eta-text-' + id);
+              if (t) t.innerHTML = data.eta ? escapeHtml(data.eta) : '<em>not set</em>';
+              flag.style.color = 'var(--blue-bright)';
+              flag.textContent = 'Saved';
+              setTimeout(function () { flag.textContent = ''; }, 3000);
+            } else {
+              flag.style.color = '#E2574C';
+              flag.textContent = data && data.error === 'eta_column_missing'
+                ? 'Database needs the one-time eta update (see README).'
+                : 'Could not save — try again.';
+            }
+          })
+          .catch(function () { btn.disabled = false; flag.style.color = '#E2574C'; flag.textContent = 'Could not save — try again.'; });
       });
     });
 
@@ -339,7 +386,8 @@
       company: document.getElementById('n-company').value.trim(),
       origin: document.getElementById('n-origin').value.trim(),
       destination: document.getElementById('n-dest').value.trim(),
-      type: document.getElementById('n-type').value
+      type: document.getElementById('n-type').value,
+      eta: document.getElementById('n-eta').value.trim()
     };
     fetch('/api/admin/shipments', {
       method: 'POST',
@@ -352,8 +400,10 @@
           document.getElementById('n-company').value = '';
           document.getElementById('n-origin').value = '';
           document.getElementById('n-dest').value = '';
+          document.getElementById('n-eta').value = '';
           var flag = document.getElementById('create-flag');
-          flag.innerHTML = '<div class="created-flag">' + escapeHtml(data.id) + ' created — give this number to the client so they can track it.</div>';
+          flag.innerHTML = '<div class="created-flag">' + escapeHtml(data.id) + ' created — give this number to the client so they can track it.</div>' +
+            (data.eta_saved === false ? '<div class="created-flag" style="color:#E2574C;">The estimated delivery was NOT saved — the database needs the one-time eta update (see README).</div>' : '');
           loadShipments(function () {});
         }
       });

@@ -29,6 +29,7 @@ export async function onRequestPost(context) {
   const origin = (body.origin || 'Origin TBD').toString().slice(0, 200);
   const destination = (body.destination || 'Destination TBD').toString().slice(0, 200);
   const type = (body.type || 'General freight').toString().slice(0, 100);
+  const eta = (body.eta || '').toString().trim().slice(0, 120);
 
   // Atomically bump the shared counter to mint the next tracking number.
   const counter = await env.DB
@@ -42,12 +43,25 @@ export async function onRequestPost(context) {
   const id = 'JBR-' + counter.value;
   const now = new Date().toISOString();
 
-  await env.DB
-    .prepare(
-      'INSERT INTO shipments (id, company, origin, destination, type, stage, pickup_at, created_at) VALUES (?, ?, ?, ?, ?, 0, ?, ?)'
-    )
-    .bind(id, company, origin, destination, type, now, now)
-    .run();
+  let etaSaved = true;
+  try {
+    await env.DB
+      .prepare(
+        'INSERT INTO shipments (id, company, origin, destination, type, stage, pickup_at, created_at, eta) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?)'
+      )
+      .bind(id, company, origin, destination, type, now, now, eta || null)
+      .run();
+  } catch (e) {
+    // The eta column hasn't been added to the database yet — create the
+    // shipment anyway so staff are never blocked, and say so.
+    etaSaved = !eta;
+    await env.DB
+      .prepare(
+        'INSERT INTO shipments (id, company, origin, destination, type, stage, pickup_at, created_at) VALUES (?, ?, ?, ?, ?, 0, ?, ?)'
+      )
+      .bind(id, company, origin, destination, type, now, now)
+      .run();
+  }
 
-  return json({ id, company, origin, destination, type, stage: 0, pickup_at: now });
+  return json({ id, company, origin, destination, type, stage: 0, pickup_at: now, eta: eta || null, eta_saved: etaSaved });
 }
